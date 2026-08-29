@@ -7,7 +7,7 @@ Release notes are drafted automatically from merged pull requests and published 
 
 This file records anything released before that automation landed.
 
-## v0.2.0 — unreleased
+## v0.2.0 — 2026-08-29
 
 **A narration trail per run.** `reportProgress(string $line)` — on the `TaskRun` model and as a shorthand on
 `InteractsWithTaskRun` — appends a `{at, line}` entry to a new append-only `progress` jsonb column, for jobs whose
@@ -23,7 +23,7 @@ story is worth more than one `message` line.
   (`{broadcast.channel}.{id}`) carrying `{id, status, entry}`. The bundled page's client config exposes the pattern as
   `broadcast.run_channel`.
 
-## v0.1.0 — unreleased
+## v0.1.0 — 2026-08-29
 
 Initial extraction of the vault/music task-run lineage: `task_runs` schema + model, guarded dispatcher
 (overlap + orphan), three opt-in reporting levels (trait / TrackedJob middleware / untracked),
