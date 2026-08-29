@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Carbon;
 use Override;
+use Phattarachai\TaskRunsLaravel\Events\TaskRunProgress;
 use Phattarachai\TaskRunsLaravel\Events\TaskRunStatusChanged;
 
 /**
@@ -26,6 +27,7 @@ use Phattarachai\TaskRunsLaravel\Events\TaskRunStatusChanged;
  * @property int $processed
  * @property int $attempts
  * @property string|null $message
+ * @property list<array{at: string, line: string}>|null $progress
  * @property array<string, mixed>|null $options
  * @property string|null $dispatched_by
  * @property bool $cancel_requested
@@ -90,6 +92,29 @@ class TaskRun extends Model
         $this->broadcastState();
     }
 
+    /**
+     * Append one narrated line to the run's trail — the *story* of the run, next to
+     * `message`, which only ever holds the latest headline. The append re-reads the row
+     * under a row lock, so two writers (a job and, say, a streamed model narration)
+     * cannot lose each other's line.
+     *
+     * `task-runs.progress_limit` caps how many entries are kept; the oldest fall off.
+     */
+    public function reportProgress(string $line): void
+    {
+        $entry = ['at' => now()->toIso8601String(), 'line' => $line];
+
+        $this->getConnection()->transaction(function () use ($entry): void {
+            $locked = $this->newQuery()->whereKey($this->getKey())->lockForUpdate()->first();
+
+            $this->forceFill([
+                'progress' => $this->capped([...($locked->progress ?? $this->progress ?? []), $entry]),
+            ])->save();
+        });
+
+        $this->broadcastProgress($entry);
+    }
+
     public function markSuccess(?string $message = null): void
     {
         $this->finish(self::SUCCESS, $message);
@@ -152,6 +177,7 @@ class TaskRun extends Model
             'processed' => $this->processed,
             'attempts' => $this->attempts,
             'message' => $this->message,
+            'progress' => $this->progress ?? [],
             'dispatched_by' => $this->dispatched_by,
             'cancel_requested' => $this->cancel_requested,
             'started_at' => $this->started_at?->toIso8601String(),
@@ -186,6 +212,7 @@ class TaskRun extends Model
             'total' => 'integer',
             'processed' => 'integer',
             'attempts' => 'integer',
+            'progress' => 'array',
             'options' => 'array',
             'cancel_requested' => 'boolean',
             'started_at' => 'datetime',
@@ -213,6 +240,19 @@ class TaskRun extends Model
         $this->broadcastState();
     }
 
+    /**
+     * @param  list<array{at: string, line: string}>  $entries
+     * @return list<array{at: string, line: string}>
+     */
+    private function capped(array $entries): array
+    {
+        $limit = config('task-runs.progress_limit');
+
+        return $limit === null
+            ? $entries
+            : array_slice($entries, -(int) $limit);
+    }
+
     private function broadcastState(): void
     {
         if (config('task-runs.broadcast.enabled') !== true) {
@@ -220,5 +260,17 @@ class TaskRun extends Model
         }
 
         event(new TaskRunStatusChanged($this->snapshot()));
+    }
+
+    /**
+     * @param  array{at: string, line: string}  $entry
+     */
+    private function broadcastProgress(array $entry): void
+    {
+        if (config('task-runs.broadcast.enabled') !== true) {
+            return;
+        }
+
+        event(new TaskRunProgress($this->id, $this->status, $entry));
     }
 }

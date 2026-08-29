@@ -34,6 +34,10 @@ return [
 
     'history_limit' => (int) env('TASK_RUNS_HISTORY_LIMIT', 30),
 
+    // Ceiling on the append-only `progress` trail per run; the oldest entries fall off.
+    // null keeps every line — only safe when you know the job narrates a bounded number.
+    'progress_limit' => 200,
+
     // Task types the HTTP run endpoint may dispatch. null = every type in `jobs`; [] = none.
     'runnable' => null,
 

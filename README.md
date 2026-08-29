@@ -12,7 +12,8 @@ and review run history **inside your app** — Horizon tells you a job was *deli
 7,412 of 13,798 rows processed, cancel requested, resumed after a deploy, failed with this message, three days ago.
 
 - **A `TaskRun` row per execution** — status (`queued / running / success / failed / cancelled`), progress
-  (`processed / total`), attempts, a message line, options, an optional subject morph, timestamps.
+  (`processed / total`), attempts, a message line, an append-only narration trail, options, an optional subject
+  morph, timestamps.
 - **A dispatcher with guard rails** — type → job map in config, an overlap guard (a double-click is a no-op, not a
   second run), and an orphan guard that fails + supersedes a run whose job vanished (killed worker, flushed Redis).
 - **Three opt-in reporting levels** — a trait for jobs that report progress, a job middleware for start/finish-only
@@ -91,6 +92,25 @@ class ScanJob implements ShouldQueue
         $this->taskRun->markSuccess('Scanned everything.');
     }
 }
+```
+
+### Narrate the run: `reportProgress()`
+
+`message` holds one headline; `reportProgress()` appends to a trail of `{at, line}` entries — the *story* of the run,
+for a feed the user can open and read:
+
+```php
+$this->reportProgress('เจอ Tax ID 0105558… → ค้นคู่ค้าใน DB');   // the trait's shorthand
+$this->taskRun->reportProgress('ยอด 10,000 = ฐาน 9,345.79 + VAT 654.21 ✓');
+```
+
+Each append re-reads the row under a row lock, so two writers can't lose each other's line, and it moves no counter —
+narration and `advance()` are independent. `progress_limit` (default 200) caps the trail; the oldest lines fall off,
+and the whole thing goes away with the row when the run is pruned. It rides in `snapshot()`, so the poll payload,
+the resource, and the status broadcast all carry it already:
+
+```json
+{"id": 41, "status": "running", "processed": 2, "progress": [{"at": "2026-08-29T10:00:04+07:00", "line": "…"}]}
 ```
 
 **Level 2 — the middleware, for start/finish-only jobs.** No lifecycle calls in `handle()` at all:
@@ -232,6 +252,21 @@ socket is down. Authorize the channel in your `routes/channels.php`:
 Broadcast::channel('task-runs', fn ($user) => $user !== null);
 ```
 
+`reportProgress()` broadcasts too, as **`TaskRunProgress`** — but on a channel **per run**, `task-runs.{id}`, because a
+feed drawer open on one run has no business receiving another run's narration. The frame carries
+`{id, status, entry: {at, line}}`, so a listener can append without refetching:
+
+```php
+Broadcast::channel('task-runs.{taskRun}', fn ($user) => $user !== null);
+```
+
+```js
+Echo.private(`task-runs.${id}`).listen('.TaskRunProgress', ({ entry }) => append(entry));
+```
+
+The bundled page's client config hands you the pattern as `broadcast.run_channel` (`task-runs.__ID__`), so the channel
+name is never hardcoded twice.
+
 ## Pruning
 
 Neither of this package's ancestors pruned, and their tables grew forever. Set `retention_days` and finished runs
@@ -258,8 +293,9 @@ See [`config/task-runs.php`](config/task-runs.php) — every key is documented i
 | `orphan_grace_seconds` | `60` | idle window before an empty queue means the job is gone (`null` disables) |
 | `retention_days` | `null` | prune finished runs after N days |
 | `history_limit` | `30` | rows in the history section |
+| `progress_limit` | `200` | ceiling on the narration trail per run (`null` = unbounded) |
 | `runnable` | `null` | whitelist for `POST /tasks/run/{type}` |
-| `broadcast.enabled` | `false` | fire `TaskRunStatusChanged` on lifecycle writes |
+| `broadcast.enabled` | `false` | fire `TaskRunStatusChanged` on lifecycle writes and `TaskRunProgress` on narration |
 | `routes.prefix` / `routes.middleware` | `tasks` / `['web', 'auth']` | where and behind what it mounts |
 | `ui.enabled` / `ui.page` | `true` / `TaskRuns` | the Inertia index route and component name |
 

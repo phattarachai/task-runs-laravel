@@ -7,6 +7,22 @@ Release notes are drafted automatically from merged pull requests and published 
 
 This file records anything released before that automation landed.
 
+## v0.2.0 — unreleased
+
+**A narration trail per run.** `reportProgress(string $line)` — on the `TaskRun` model and as a shorthand on
+`InteractsWithTaskRun` — appends a `{at, line}` entry to a new append-only `progress` jsonb column, for jobs whose
+story is worth more than one `message` line.
+
+- New migration `0001_01_01_000002_add_progress_to_task_runs_table`.
+- Appends re-read the row under a row lock, so concurrent writers can't lose each other's line. The counter and the
+  headline message are untouched by narration.
+- `progress_limit` (default 200) caps the trail; the oldest entries fall off. `null` keeps everything. The trail is
+  pruned with its row.
+- `progress` rides in `snapshot()`, so the poll payload, `TaskRunResource`, and `TaskRunStatusChanged` all carry it.
+- New `TaskRunProgress` broadcast event, gated on `broadcast.enabled` like the rest, on a channel **per run**
+  (`{broadcast.channel}.{id}`) carrying `{id, status, entry}`. The bundled page's client config exposes the pattern as
+  `broadcast.run_channel`.
+
 ## v0.1.0 — unreleased
 
 Initial extraction of the vault/music task-run lineage: `task_runs` schema + model, guarded dispatcher

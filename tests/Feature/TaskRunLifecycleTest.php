@@ -89,8 +89,14 @@ test('snapshot is the full wire shape', function (): void {
 
     expect(array_keys($run->refresh()->snapshot()))->toBe([
         'id', 'type', 'status', 'subject_type', 'subject_id', 'total', 'processed', 'attempts',
-        'message', 'dispatched_by', 'cancel_requested', 'started_at', 'finished_at', 'created_at',
+        'message', 'progress', 'dispatched_by', 'cancel_requested', 'started_at', 'finished_at', 'created_at',
     ]);
+});
+
+test('a run with nothing narrated yet snapshots an empty progress trail', function (): void {
+    $run = TaskRun::query()->create(['type' => 'demo']);
+
+    expect($run->snapshot()['progress'])->toBe([]);
 });
 
 test('the model class is swappable via config', function (): void {

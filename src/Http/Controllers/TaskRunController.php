@@ -7,6 +7,7 @@ namespace Phattarachai\TaskRunsLaravel\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Inertia\Inertia;
 use Inertia\Response;
+use Phattarachai\TaskRunsLaravel\Events\TaskRunProgress;
 use Phattarachai\TaskRunsLaravel\Http\Resources\TaskRunResource;
 use Phattarachai\TaskRunsLaravel\Models\TaskRun;
 use Phattarachai\TaskRunsLaravel\Support\HorizonStatus;
@@ -104,6 +105,8 @@ class TaskRunController
             'broadcast' => [
                 'enabled' => config('task-runs.broadcast.enabled') === true,
                 'channel' => (string) config('task-runs.broadcast.channel', 'task-runs'),
+                // Per-run progress channel; substitute the run id for the placeholder.
+                'run_channel' => TaskRunProgress::channelName('__ID__'),
                 'private' => config('task-runs.broadcast.private', true) === true,
             ],
             'endpoints' => [

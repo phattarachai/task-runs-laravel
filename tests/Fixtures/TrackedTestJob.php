@@ -9,7 +9,8 @@ use Illuminate\Foundation\Queue\Queueable;
 use Phattarachai\TaskRunsLaravel\Concerns\InteractsWithTaskRun;
 
 /**
- * A fine-grained consumer: manual markRunning / advance / markSuccess, trait boilerplate.
+ * A fine-grained consumer: manual markRunning / advance / reportProgress / markSuccess,
+ * trait boilerplate.
  */
 class TrackedTestJob implements ShouldQueue
 {
@@ -25,6 +26,7 @@ class TrackedTestJob implements ShouldQueue
         $this->taskRun->markRunning(3);
 
         foreach (range(1, 3) as $step) {
+            $this->reportProgress("narrating step {$step}");
             $this->taskRun->advance(message: "step {$step}");
         }
 
