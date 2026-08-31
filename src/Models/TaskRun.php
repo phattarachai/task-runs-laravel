@@ -28,6 +28,7 @@ use Phattarachai\TaskRunsLaravel\Events\TaskRunStatusChanged;
  * @property int $attempts
  * @property string|null $message
  * @property list<array{at: string, line: string}>|null $progress
+ * @property array<string, mixed>|null $request
  * @property array<string, mixed>|null $options
  * @property string|null $dispatched_by
  * @property bool $cancel_requested
@@ -113,6 +114,16 @@ class TaskRun extends Model
         });
 
         $this->broadcastProgress($entry);
+    }
+
+    /**
+     * Persist the prompt and call-parameters payload behind this run, written once at run start.
+     *
+     * @param  array<string, mixed>  $request
+     */
+    public function recordRequest(array $request): void
+    {
+        $this->forceFill(['request' => $request])->save();
     }
 
     public function markSuccess(?string $message = null): void
@@ -213,6 +224,7 @@ class TaskRun extends Model
             'processed' => 'integer',
             'attempts' => 'integer',
             'progress' => 'array',
+            'request' => 'array',
             'options' => 'array',
             'cancel_requested' => 'boolean',
             'started_at' => 'datetime',

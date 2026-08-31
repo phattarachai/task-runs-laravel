@@ -7,6 +7,15 @@ Release notes are drafted automatically from merged pull requests and published 
 
 This file records anything released before that automation landed.
 
+## v0.3.0 — 2026-08-31
+
+**A `request` column per run.** A nullable `request` jsonb column on `task_runs`, holding the prompt and
+call parameters behind a run — written by a producer such as `phattarachai/claude-tasks-laravel`.
+
+- New migration `0001_01_01_000003_add_request_to_task_runs_table`.
+- `recordRequest(array $request)` on the `TaskRun` model persists the payload; it casts to `array`.
+- Held out of `snapshot()`, so the polling list stays light — the payload is fetched only on detail open.
+
 ## v0.2.0 — 2026-08-29
 
 **A narration trail per run.** `reportProgress(string $line)` — on the `TaskRun` model and as a shorthand on
