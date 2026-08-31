@@ -13,7 +13,7 @@ and review run history **inside your app** — Horizon tells you a job was *deli
 
 - **A `TaskRun` row per execution** — status (`queued / running / success / failed / cancelled`), progress
   (`processed / total`), attempts, a message line, an append-only narration trail, options, an optional subject
-  morph, timestamps.
+  morph, an optional request manifest, timestamps.
 - **A dispatcher with guard rails** — type → job map in config, an overlap guard (a double-click is a no-op, not a
   second run), and an orphan guard that fails + supersedes a run whose job vanished (killed worker, flushed Redis).
 - **Three opt-in reporting levels** — a trait for jobs that report progress, a job middleware for start/finish-only
@@ -112,6 +112,13 @@ the resource, and the status broadcast all carry it already:
 ```json
 {"id": 41, "status": "running", "processed": 2, "progress": [{"at": "2026-08-29T10:00:04+07:00", "line": "…"}]}
 ```
+
+### Log what the run asked: `recordRequest()`
+
+`recordRequest(array $manifest)` stores a JSON payload on the row's nullable `request` column — the prompt and call
+parameters a producer wants to keep for reproducibility (claude-tasks writes its `RunManifest` here). Unlike
+`progress`, it is deliberately held **out of `snapshot()`**: it can be large and only a detail view needs it, so read
+it straight off the row when you open one, never on every poll frame.
 
 **Level 2 — the middleware, for start/finish-only jobs.** No lifecycle calls in `handle()` at all:
 
